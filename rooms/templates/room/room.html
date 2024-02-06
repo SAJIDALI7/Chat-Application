@@ -1,0 +1,159 @@
+{% extends 'app/index.html' %}
+
+{% block title %} {{ room.name }} {% endblock title %}
+
+{% block content %}
+    <div class="p-10 lg:p-20 text-center">
+        <h1 class="text-3xl lg:text-6xl text-white">{{ room.name }}</h1>
+    </div>
+
+    <div class="lg:w-2/4 mx-4 lg:mx-auto p-4 bg-white rounded-xl">
+        <div class="chat-messages space-y-3" id="chat-messages">
+            {% for message in messages %}
+                <div class="p-4 bg-gray-200 rounded-xl">
+
+                    <p class="font-semibold"> {{ message.user.username }}</p>
+
+                    <p>{{ message.content }}</p>
+
+                </div>
+            {% endfor %}
+        {% if images %}
+            {% for im in images %}
+            <div class="p-4 bg-gray-200 rounded-xl">
+                
+                <p class="font-semibold"> {{ im.uploader.username }}</p>
+
+                <a href="" download="">{{ im.file }}</a>                
+            </div> 
+            {% endfor %}
+        {% endif %}
+        </div>
+        
+    </div>
+
+    <div class="lg:w-2/4 mt-6 mx-7 lg:mx-auto p-4 bg-white rounded-xl">
+        <form method="POST" class="flex">
+            {% csrf_token %}
+            <input type="text" name="content" class="flex-1 mr-4 px-2" placeholder="Message" id="chat-message-input">
+
+            <label for="file-upload">
+                <i class="fa-solid fa-paperclip flex-1 mr-3 mt-3" onclick="openFilemenager()"></i>
+            </label>
+            <input type="file" name="" id="file-upload" style="display: none;">
+            <button class="px-5 py-3 rounded-xl text-white bg-teal-600 hover:bg-teal-700" id="chat-message-submit">Submit</button>
+        </form>
+    </div>
+
+{% endblock content %}
+
+{% block script %}
+
+    {{ room.slug|json_script:"json-roomname" }}
+
+    {{ request.user.username|json_script:"json-username" }}
+
+
+    <script>
+
+        const roomName = JSON.parse(document.getElementById('json-roomname').textContent);
+        const userName = JSON.parse(document.getElementById('json-username').textContent);
+         
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/'+ roomName + '/');
+        
+        ws.onopen = function(e){
+            console.log('websocket Connected...');
+        }
+
+        ws.onmessage = function (e){
+            console.log('Message Received From Client...');
+
+            const data = JSON.parse(e.data)
+            console.log("data", data);
+
+            // console.log(data['fileURL']);
+
+            // console.log(data['fileURL']);
+            if(data.message){
+                let html = '<div class="p-4 bg-gray-200 rounded-xl ">';
+                    html += '<p class="font-semibold">' + data.username + '</p>';
+                    html += '<p>' + data.message + '</p> </div>';
+                document.querySelector('#chat-messages').innerHTML += html;
+            
+                
+                scrollToBottom()
+            }
+
+            if(data.type === 'file_manage'){
+                console.log(data.fileURL);
+                let html = '<div class="p-4 bg-gray-200 rounded-xl ">';
+                    html += '<p class="font-semibold">' + data.username + '</p>';
+                    html += '<a href=' + data.fileURL + ' download='+ data.fileURL +'>' + data.fileURL + '</a> </div>';
+                document.querySelector('#chat-messages').innerHTML += html; 
+
+                scrollToBottom();
+            }
+        }
+
+        ws.onclose = function(e){
+            console.log('websocket Disconnected...');
+        }
+        
+        
+        
+        
+
+        document.querySelector('#chat-message-submit').onclick = function (e){
+            e.preventDefault();
+
+            const messageInputDom = document.getElementById('chat-message-input');
+            const message = messageInputDom.value; 
+            
+            ws.send(JSON.stringify({
+                'type': 'chat_message',
+                'message': message,
+                'username': userName,
+                'room': roomName
+            }))
+            messageInputDom.value = '';
+            
+            return false
+        }
+
+        function scrollToBottom(){
+            const objdiv  = document.querySelector('#chat-messages');
+            objdiv.scrollTop = objdiv.scrollHeight;
+        }
+
+        scrollToBottom()
+
+        function openFilemenager(){
+            document.getElementById('file-upload').click;
+        }
+
+        document.getElementById('file-upload').addEventListener('change', handleFunc);
+
+        function handleFunc(event){
+            const file_Input = event.target;
+
+            // console.log(file_Input);
+            const Selected_file = file_Input.files[0];
+
+            console.log(Selected_file);
+
+            if (Selected_file){
+                const file_message = URL.createObjectURL(Selected_file);
+                console.log(file_message);
+                ws.send(JSON.stringify({
+                    'type': 'file_manage',
+                    'fileURL' : file_message,
+                    'room': roomName,
+                    'username': userName
+                }))
+            }
+        }
+        
+    </script>
+
+{% endblock script %}
+       
